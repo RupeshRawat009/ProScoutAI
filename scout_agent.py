@@ -2,12 +2,9 @@ import pyodbc
 import pandas as pd
 import streamlit as st
 from streamlit_echarts import st_echarts
-import antigravity # This meets the course requirement!
+import antigravity 
+import os
 
-# Create a small function that uses it
-def get_football_fun_fact():
-    # You can link this to a button or a sidebar expander
-    return "Football is the most popular sport in the world, played by over 250 million people!"
 # -------------------------------
 # CONFIG & STYLING
 # -------------------------------
@@ -21,24 +18,31 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # -------------------------------
-# DATABASE & DATA CLEANING
+# DATA LOADING (LOCAL vs CLOUD)
 # -------------------------------
 @st.cache_data
 def get_efficiency_report(min_minutes=800):
     try:
-        conn_str = "DRIVER={ODBC Driver 17 for SQL Server};SERVER=RAWATJI\SQLEXPRESS;DATABASE=SportsAnalyticsDB;Trusted_Connection=yes;"
-        conn = pyodbc.connect(conn_str)
-        df = pd.read_sql(f"SELECT * FROM [players_data_light-2025_2026] WHERE Min > {min_minutes}", conn)
+        # Check if running in Streamlit Cloud environment
+        if 'STREAMLIT_SHARING' in os.environ:
+            # Load from your uploaded CSV file
+            df = pd.read_csv('players_data_light-2025_2026.csv')
+            df = df[df['Min'] > min_minutes]
+        else:
+            # Local SQL Server connection
+            conn_str = "DRIVER={ODBC Driver 17 for SQL Server};SERVER=RAWATJI\SQLEXPRESS;DATABASE=SportsAnalyticsDB;Trusted_Connection=yes;"
+            conn = pyodbc.connect(conn_str)
+            df = pd.read_sql(f"SELECT * FROM [players_data_light-2025_2026] WHERE Min > {min_minutes}", conn)
+            conn.close()
         
-        # Only fill numeric columns to prevent TypeError
+        # Data Cleaning (Same for both)
         numeric_cols = df.select_dtypes(include=['number']).columns
         df[numeric_cols] = df[numeric_cols].fillna(0)
-        
         df['EfficiencyScore'] = (df['Gls'] + df['Ast']) / df['Min'].replace(0, 1)
-        conn.close()
+        
         return df
     except Exception as e:
-        st.error(f"Database Error: {e}")
+        st.error(f"Data Load Error: {e}")
         return pd.DataFrame()
 
 def simulate_player_profile(p_data):
@@ -77,7 +81,6 @@ with st.sidebar:
 # -------------------------------
 st.markdown("<h1 style='text-align: center; color: #1a237e;'>⚽ Pro Scout AI: Elite Analytics</h1>", unsafe_allow_html=True)
 
-# Row 1: Profile & Metrics
 with st.container(border=True):
     col1, col2, col3 = st.columns([1, 2, 2])
     with col1:
