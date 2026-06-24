@@ -23,25 +23,27 @@ st.markdown("""
 @st.cache_data
 def get_efficiency_report(min_minutes=800):
     try:
-        # Check if running in Streamlit Cloud environment
-        if 'STREAMLIT_SHARING' in os.environ:
-            # Load from your uploaded CSV file
+        # Use a more reliable check for Streamlit Cloud
+        # Streamlit Cloud always uses '/home/appuser' as the home directory
+        if os.path.exists('/home/appuser'):
+            # Load from CSV for Cloud
             df = pd.read_csv('players_data_light-2025_2026.csv')
             df = df[df['Min'] > min_minutes]
         else:
             # Local SQL Server connection
             conn_str = "DRIVER={ODBC Driver 17 for SQL Server};SERVER=RAWATJI\SQLEXPRESS;DATABASE=SportsAnalyticsDB;Trusted_Connection=yes;"
-            conn = pyodbc.connect(conn_str)
+            conn = pyodbc.connect(conn_str, timeout=5) # Added a 5-second timeout
             df = pd.read_sql(f"SELECT * FROM [players_data_light-2025_2026] WHERE Min > {min_minutes}", conn)
             conn.close()
         
-        # Data Cleaning (Same for both)
+        # Data Cleaning
         numeric_cols = df.select_dtypes(include=['number']).columns
         df[numeric_cols] = df[numeric_cols].fillna(0)
         df['EfficiencyScore'] = (df['Gls'] + df['Ast']) / df['Min'].replace(0, 1)
         
         return df
     except Exception as e:
+        # This will now tell you if the CSV is missing or if the SQL failed
         st.error(f"Data Load Error: {e}")
         return pd.DataFrame()
 
